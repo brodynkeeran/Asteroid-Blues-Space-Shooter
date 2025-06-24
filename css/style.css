@@ -1,0 +1,68 @@
+
+html, body {
+    height: 100%;
+    margin: 0;
+  }
+  
+  body {
+    display: flex;
+    justify-content: center;  /* horizontal centering */
+    align-items: center;      /* vertical centering */
+    background: #111;         /* optional, for contrast */
+    height: 100vh;            /* full viewport height */
+    overflow: hidden;
+  }
+  
+  canvas {
+    background: #000;
+    border: 3px solid #66ffff;
+    display: block;
+  }
+  
+      #hud {
+        position: absolute;
+        top: 10px; left: 20px;
+        color: #009999;
+        font-family: monospace;
+        font-size: 20px;
+        user-select: none;
+      }
+      #waveScreen {
+        position: absolute;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.9);
+        color: #00ffff;
+        font-family: monospace;
+        font-size: 40px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        user-select: none;
+        z-index: 10;
+        visibility: hidden;
+      }
+      #waveScreen span {
+        font-size: 18px;
+        margin-top: 20px;
+        color: #66ffff;
+      }
+      /* Health bar container */
+      #healthBarContainer {
+        position: absolute;
+        top: 40px; left: 20px;
+        width: 200px;
+        height: 20px;
+        border: 2px solid #00ffff;
+        border-radius: 5px;
+        background: #222;
+        user-select: none;
+      }
+      /* Health bar fill */
+      #healthBarFill {
+        height: 100%;
+        background: #00ffff;
+        width: 100%;
+        border-radius: 3px;
+        transition: width 0.2s ease;
+      }
