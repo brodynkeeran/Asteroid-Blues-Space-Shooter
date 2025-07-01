@@ -19,6 +19,31 @@ const loreSnippets = [
   "A blinking light in your cockpit has been blinking since launch day.",
 ];
 
+const enemyTypes = {
+  basic: { radius: 15, speed: 1.2, hp: 20, color: "steelblue", tracking: 250 },
+  fast: { radius: 13, speed: 2.5, hp: 15, color: "lightgreen", tracking: 400, shape: "long"},
+  strong: { radius: 18, speed: 0.8, hp: 40, color: "orange", tracking: 250},
+  boss: { radius: 100, speed: 0.6, hp: 500, color: "purple", isBoss: true, tracking:300}
+};
+
+// --- Cheat Code stuff ---
+function jumpToWave(targetWave) {
+  wave = targetWave;
+  maxEnemiesThisWave = 5 + Math.floor(wave * 2);
+  enemiesSpawnedThisWave = 0;
+  enemiesKilledThisWave = 0;
+  waveInProgress = true;
+  gamePausedForWave = false;
+  spawnTimer = 0;
+  waveDelayTimer = 0;
+  enemies = [];
+  bullets = [];
+  enemyBullets = [];
+  waveScreen.style.visibility = "hidden";
+  hud.style.visibility = "visible";
+  updateHUD();
+  console.log(`⏩ Skipped to Wave ${wave}`);
+}
 
 // --- Canvas wrapper aspect ratio toggle ---
 function updateCanvasWrapper() {
@@ -61,6 +86,7 @@ const SHAKE_INTENSITY = 5;
 
 let keys = {};
 let pauseKeyDown = false;  // to debounce pause toggle
+let awaitingWaveKey = false;
 document.addEventListener("keydown", e => {
   keys[e.code] = true;
 
@@ -68,6 +94,24 @@ document.addEventListener("keydown", e => {
     isPaused = !isPaused;
     updateHUD();
     pauseKeyDown = true;
+  }
+
+
+
+  // ✅ Detect Shift + L to enter cheat mode
+  if (e.shiftKey && e.code === "KeyL") {
+    awaitingWaveKey = true;
+    console.log("Cheat mode activated: press a number to jump to that wave.");
+    return;
+  }
+
+  if (awaitingWaveKey && e.code.startsWith("Digit")) {
+    const waveNum = parseInt(e.code.replace("Digit", ""), 10);
+    if (!isNaN(waveNum)) {
+      console.log("Jumping to wave:", waveNum);
+      jumpToWave(waveNum);
+      awaitingWaveKey = false;
+    }
   }
 });
 document.addEventListener("keyup", e => {
@@ -165,29 +209,36 @@ function shootBullet(source, isEnemy = false) {
     isEnemy
   });
 }
-
-function spawnEnemy() {
+function spawnEnemy(type = "basic", posOverride = null) {
+  const t = enemyTypes[type] || enemyTypes.basic;
   const side = Math.floor(Math.random() * 4);
-  const pos = [
+  const pos = posOverride || [
     { x: Math.random() * canvas.width, y: -30 },
     { x: Math.random() * canvas.width, y: canvas.height + 30 },
     { x: -30, y: Math.random() * canvas.height },
     { x: canvas.width + 30, y: Math.random() * canvas.height }
   ][side];
+
   enemies.push({
     ...pos,
-    radius: 15,
     angle: 0,
-    speed: 1 + Math.random(),
-    color: "steelblue",
+    speed: t.speed,
+    radius: t.radius,
+    color: t.color,
     shootCooldown: 1000 + Math.random() * 1000,
     randomAngle: Math.random() * Math.PI * 2,
     opacity: 0,
-    hp: 20 * (1 + 0.02 * (wave - 1)), // AI health grows 2% per wave
+    hp: t.hp * (1 + 0.02 * (wave - 1)),
+    tracking: t.tracking || 250,
     showHealthBar: false,
-    healthBarTimer: 0
+    healthBarTimer: 0,
+    isBoss: t.isBoss || false,
+    shape: t.shape || "default"  
   });
 }
+
+
+
 function spawnDebris() {
   debris.push({
     x: Math.random() * canvas.width,
@@ -419,7 +470,7 @@ function update(deltaTime) {
       dist = Math.hypot(dx, dy);
 
     if (e.opacity >= 1) {
-      if (dist < trackingRadius) {
+      if (dist < e.tracking) {
         const angleToPlayer = Math.atan2(dy, dx);
         let diff = ((angleToPlayer - e.angle + Math.PI) % (2 * Math.PI)) - Math.PI;
 
@@ -446,7 +497,18 @@ function update(deltaTime) {
         e.y += Math.sin(e.randomAngle) * e.speed * 0.3;
       }
     }
+    if (e.isBoss) {
+      // Slightly slow drift or dramatic pause effect
+      e.speed *= 0.99;
 
+      // Occasionally summon minions
+      if (Math.random() < 0.01 && enemiesSpawnedThisWave < maxEnemiesThisWave) {
+        spawnEnemy("fast");
+        enemiesSpawnedThisWave++;
+      }
+      
+    }
+  
     e.x = (e.x + canvas.width) % canvas.width;
     e.y = (e.y + canvas.height) % canvas.height;
 
@@ -607,10 +669,23 @@ function update(deltaTime) {
   if (waveInProgress) {
     spawnTimer += deltaTime;
     if (spawnTimer >= spawnInterval && enemiesSpawnedThisWave < maxEnemiesThisWave) {
-      spawnEnemy();
-      enemiesSpawnedThisWave++;
+      if (wave % 5 === 0 && enemiesSpawnedThisWave === 0) {
+        const center = { x: canvas.width / 2, y: canvas.height / 2 };
+        spawnEnemy("boss", center);
+      }
+      else if (wave >= 4 && enemiesSpawnedThisWave % 4 === 0) {
+        spawnEnemy("strong");
+      } else if (wave >= 2 && enemiesSpawnedThisWave % 3 === 0) {
+        spawnEnemy("fast");
+      } else {
+        spawnEnemy("basic");
+      }
+    
+      enemiesSpawnedThisWave++; // ✅ move outside of condition branches
       spawnTimer = 0;
     }
+    
+    
 
     // If all enemies spawned and none left alive, pause for wave
     if (enemiesSpawnedThisWave >= maxEnemiesThisWave && enemies.length === 0) {
@@ -663,7 +738,16 @@ function drawEnemies() {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
-
+    if (e.shape === "long") {
+      ctx.moveTo(25, 0);   // longer nose
+      ctx.lineTo(-10, 10); // back left
+      ctx.lineTo(-10, -10); // back right
+    } else {
+      ctx.moveTo(15, 0);
+      ctx.lineTo(-10, 8);
+      ctx.lineTo(-10, -8);
+    }
+    
     // Draw health bar above enemy if visible
     if (e.showHealthBar) {
       const barWidth = 30;
@@ -716,6 +800,7 @@ function drawDebris() {
 
     // Create a radial gradient to simulate light from top-left
     const radius = d.size / 2;
+    
     const gradient = ctx.createRadialGradient(-radius/2, -radius/2, radius/4, 0, 0, radius);
     gradient.addColorStop(0, '#66aaff'); // bright highlight color
     gradient.addColorStop(0.7, d.color); // base color
